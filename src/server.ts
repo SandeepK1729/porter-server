@@ -1,108 +1,76 @@
-import http from 'http';
-import fs from 'fs';
-import http2, {
-  Http2ServerRequest,
-  Http2ServerResponse,
-  ServerHttp2Session
-} from "http2";
-import crypto from "crypto";
-import { TunnelRequest, TunnelResponse } from "./types";
+import http2, { ServerHttp2Session, ServerHttp2Stream } from "node:http2";
+import crypto from "node:crypto";
 
-const agents = new Map<string, ServerHttp2Session>();
-const pending = new Map<string, Http2ServerResponse>();
+import { HTTP2_SERVER_OPTIONS, PORT } from "./config";
+import { http1Handler } from "./routes";
+import { Agent, PendingRequest } from "./types";
+import { decodeFrames, FrameType } from "./util/buffer";
 
-// const server = http2.createServer();
-const server = http2.createServer(
-  {
-    key: fs.readFileSync("key.pem"),
-    cert: fs.readFileSync("cert.pem"),
-    allowHTTP1: true   // ⭐ THIS enables single-port dual-stack
-  },
+export const agentsMap = new Map<string, Agent>();
+export const pendingMap = new Map<string, PendingRequest>();
 
-  // HTTP/1.1 handler (public traffic)
-  (req: http.IncomingMessage, res: http.ServerResponse) => {
-    res.writeHead(200, { "content-type": "text/plain" });
-    res.end("Public HTTP/1.1 request OK\n");
-  }
+const server = http2.createSecureServer(
+  HTTP2_SERVER_OPTIONS,
+  /**
+   * HTTP/1.1 HANDLER (public traffic)
+   */
+  http1Handler
 );
-
 
 /**
  * Handle all incoming HTTP/2 streams
  */
-server.on("stream", (stream, headers) => {
-  console.log("headers", headers);
+server.on("stream", (stream: ServerHttp2Stream, headers) => {
   const path = headers[":path"]!;
 
-  /**
-   * AGENT CONNECTION
-   */
-  if (path === "/agent") {
-    const tunnelId = crypto.randomBytes(4).toString("hex");
-    agents.set(tunnelId, stream.session);
-
-    stream.respond({
-      ":status": 200,
-      "content-type": "text/plain"
-    });
-
-    stream.end(`TUNNEL_ID=${tunnelId}`);
-
-    stream.session?.on("close", () => {
-      agents.delete(tunnelId);
-    });
-
-    console.log(`Agent connected: ${tunnelId}`);
-    return;
-  }
-
-  /**
-   * PUBLIC REQUEST
-   */
-  const [, tunnelId, ...rest] = path.split("/");
-  const agentSession = agents.get(tunnelId);
-
-  if (!agentSession) {
+  if (path !== "/agent" && !path.startsWith("/_connect/")) {
+    // Not an agent or callback connection
     stream.respond({ ":status": 404 });
-    stream.end("Tunnel not found");
+    return stream.end();
+  }
+  
+  // Handle Agent Registration
+  if (path === "/agent") {
+    /**
+     * Agent registration
+     */
+    const tunnelId = crypto.randomBytes(4).toString("hex");
+    agentsMap.set(tunnelId, { stream });
+
+    stream.respond({ ":status": 200 });
+    stream.write(tunnelId + "\n");
+
+    let buffer = Buffer.alloc(0);
+
+    stream.on("data", chunk => {
+      buffer = Buffer.concat([buffer, chunk as Buffer]);
+      const decoded = decodeFrames(buffer);
+      buffer = decoded.remaining;
+
+      decoded.frames.forEach(frame => {
+        if (frame.type === FrameType.RESPONSE) {
+          const pendingReq = pendingMap.get(frame.requestId);
+          if (!pendingReq) return;
+
+          pendingReq.res.writeHead(frame.payload.status, frame.payload.headers);
+          pendingReq.res.end(frame.payload.body);
+          pendingMap.delete(frame.requestId);
+        }
+      });
+    });
+
+    // prev
+    stream.session?.on("close", () => {
+      agentsMap.delete(tunnelId);
+      console.log(`Agent disconnected → ${tunnelId}`);
+    });
+
+    console.log("Agent connected:", tunnelId);
     return;
   }
 
-  const requestId = crypto.randomUUID();
-  let body = Buffer.alloc(0);
-
-  stream.on("data", chunk => {
-    body = Buffer.concat([body, chunk]);
-  });
-
-  stream.on("end", () => {
-    pending.set(requestId, stream as unknown as Http2ServerResponse);
-
-    const agentStream = agentSession.request({
-      ":method": headers[":method"],
-      ":path": "/" + rest.join("/"),
-      "x-request-id": requestId
-    });
-
-    agentStream.write(body);
-    agentStream.end();
-
-    agentStream.on("response", headers => {
-      agentStream.on("data", chunk => {
-        stream.write(chunk);
-      });
-
-      agentStream.on("end", () => {
-        stream.respond({
-          ":status": headers[":status"] as number
-        });
-        stream.end();
-        pending.delete(requestId);
-      });
-    });
-  });
 });
 
-server.listen(8080, () => {
-  console.log("HTTP/2 tunnel server running on :8080");
+server.listen(PORT, () => {
+  console.log(`🚀 Dual-stack server running on https://localhost:${PORT}`);
 });

@@ -1,14 +1,16 @@
-export interface TunnelRequest {
-  id: string;
-  method: string;
-  path: string;
-  headers: Record<string, string>;
-  body: Buffer;
+import type {
+  Http2ServerRequest,
+  Http2ServerResponse,
+  ServerHttp2Stream,
+} from "http2";
+
+interface PendingRequest {
+  req: Http2ServerRequest;
+  res: Http2ServerResponse;
 }
 
-export interface TunnelResponse {
-  id: string;
-  status: number;
-  headers: Record<string, string>;
-  body: Buffer;
+interface Agent {
+  stream: ServerHttp2Stream;
 }
+
+export { Agent, PendingRequest };

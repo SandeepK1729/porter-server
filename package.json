@@ -21,18 +21,18 @@
   "type": "commonjs",
   "main": "src/index.ts",
   "scripts": {
-    "dev": "tsx src/server.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "tsx --inspect src/server.ts --watch",
+    "test": "vitest",
+    "build": "tsc && ncc build src/server.ts --out dist",
+    "start": "node dist/index.js"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
-    "crypto": "^1.0.1",
-    "http2": "^3.3.6",
+    "@types/node": "^24.10.8",
+    "@vercel/ncc": "^0.38.4",
+    "@vitest/ui": "^4.0.17",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
-  },
-  "dependencies": {
-    "@types/crypto-js": "^4.2.2"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17"
   }
 }
