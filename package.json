@@ -1,0 +1,38 @@
+{
+  "name": "porter-server",
+  "version": "1.0.0",
+  "description": "a port forwarding service",
+  "keywords": [
+    "port",
+    "porter",
+    "server",
+    "node"
+  ],
+  "homepage": "https://github.com/SandeepK1729/porter-server#readme",
+  "bugs": {
+    "url": "https://github.com/SandeepK1729/porter-server/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SandeepK1729/porter-server.git"
+  },
+  "license": "MIT",
+  "author": "SandeepK1729",
+  "type": "commonjs",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "tsx src/server.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "crypto": "^1.0.1",
+    "http2": "^3.3.6",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@types/crypto-js": "^4.2.2"
+  }
+}
