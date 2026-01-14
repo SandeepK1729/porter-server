@@ -1,3 +1,5 @@
+import http from 'http';
+import fs from 'fs';
 import http2, {
   Http2ServerRequest,
   Http2ServerResponse,
@@ -9,9 +11,22 @@ import { TunnelRequest, TunnelResponse } from "./types";
 const agents = new Map<string, ServerHttp2Session>();
 const pending = new Map<string, Http2ServerResponse>();
 
-const server = http2.createServer();
+// const server = http2.createServer();
+const server = http2.createServer(
+  {
+    key: fs.readFileSync("key.pem"),
+    cert: fs.readFileSync("cert.pem"),
+    allowHTTP1: true   // ⭐ THIS enables single-port dual-stack
+  },
 
-console.log("hello")
+  // HTTP/1.1 handler (public traffic)
+  (req: http.IncomingMessage, res: http.ServerResponse) => {
+    res.writeHead(200, { "content-type": "text/plain" });
+    res.end("Public HTTP/1.1 request OK\n");
+  }
+);
+
+
 /**
  * Handle all incoming HTTP/2 streams
  */
@@ -33,7 +48,7 @@ server.on("stream", (stream, headers) => {
 
     stream.end(`TUNNEL_ID=${tunnelId}`);
 
-    stream.session.on("close", () => {
+    stream.session?.on("close", () => {
       agents.delete(tunnelId);
     });
 
