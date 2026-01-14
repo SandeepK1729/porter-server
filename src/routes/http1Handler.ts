@@ -1,14 +1,16 @@
-import type { IncomingMessage, ServerResponse } from "node:http";
 import crypto from "node:crypto";
 import { agentsMap, pendingMap } from "../server";
 import { encodeFrame, FrameType } from "../util/buffer";
 import { Http2ServerRequest, Http2ServerResponse } from "node:http2";
+import healthCheck from "./healthRoute";
 
 const http1Handler = (req: Http2ServerRequest, res: Http2ServerResponse) => {
   if (!req.url) {
     res.writeHead(400);
     return res.end("Bad request");
   }
+
+  if (req.url === "/healthz") return healthCheck(req, res);
 
   if (req.url === "/agent") return;
 
