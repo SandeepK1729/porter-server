@@ -74,3 +74,5 @@ server.on("stream", (stream: ServerHttp2Stream, headers) => {
 server.listen(PORT, () => {
   console.log(`🚀 Dual-stack server running on https://localhost:${PORT}`);
 });
+
+export default server;
