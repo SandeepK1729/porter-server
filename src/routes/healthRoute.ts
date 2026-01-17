@@ -1,7 +1,7 @@
 import { agentsMap, pendingMap } from "@/server";
-import { Http2ServerRequest, Http2ServerResponse } from "http2";
+import http from "node:http";
 
-const healthCheck = (req: Http2ServerRequest, res: Http2ServerResponse) => {
+const healthCheck = (req: http.IncomingMessage, res: http.ServerResponse) => {
   const payload = {
     status: "ok",
     agents: agentsMap.size,

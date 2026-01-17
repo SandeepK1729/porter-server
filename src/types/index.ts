@@ -1,16 +1,12 @@
-import type {
-  Http2ServerRequest,
-  Http2ServerResponse,
-  ServerHttp2Stream,
-} from "http2";
+import http from "http";
 
 interface PendingRequest {
-  req: Http2ServerRequest;
-  res: Http2ServerResponse;
+  req: http.IncomingMessage;
+  res: http.ServerResponse;
 }
 
 interface Agent {
-  stream: ServerHttp2Stream;
+  stream: http.ServerResponse;
 }
 
 export { Agent, PendingRequest };

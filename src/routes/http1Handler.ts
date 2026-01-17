@@ -1,19 +1,22 @@
 import crypto from "node:crypto";
 import { agentsMap, pendingMap } from "../server";
 import { encodeFrame, FrameType } from "../util/buffer";
-import { Http2ServerRequest, Http2ServerResponse } from "node:http2";
+import http from "node:http";
 import healthCheck from "./healthRoute";
 
-const http1Handler = (req: Http2ServerRequest, res: Http2ServerResponse) => {
+const http1Handler = (req: http.IncomingMessage, res: http.ServerResponse) => {
   if (!req.url) {
     res.writeHead(400);
     return res.end("Bad request");
   }
+  console.log(`➡️  Incoming request: ${req.method} ${req.url}`);
 
+  // ---- Internal routes ----
   if (req.url === "/healthz") return healthCheck(req, res);
 
   if (req.url === "/agent") return;
 
+  // ---- Public traffic ----
   const [, tunnelId, ...rest] = req.url.split("/");
   const agent = agentsMap.get(tunnelId!);
 
@@ -31,9 +34,8 @@ const http1Handler = (req: Http2ServerRequest, res: Http2ServerResponse) => {
     headers: req.headers,
   };
 
-  const obj = { type: FrameType.REQUEST, requestId, payload };
   try {
-    agent.stream.write(encodeFrame(obj));
+    agent.socket.write(encodeFrame({ type: FrameType.REQUEST, requestId, payload }));
   } catch (err) {
     res.writeHead(502);
     res.end("Agent unavailable");
