@@ -47,4 +47,4 @@ kill_timeout = 5
     interval = "15s"
     timeout = "2s"
     method = "GET"
-    path = "/health"
+    path = "/healthz"
