@@ -7,10 +7,6 @@ const healthCheck = (req: http.IncomingMessage, res: http.ServerResponse) => {
     agents: agentsMap.size,
     pending_requests: pendingMap.size,
   };
-  console.log({
-    message: "Health check requested",
-    ...payload,
-  });
   res.writeHead(200);
   res.end(JSON.stringify(payload));
 };
