@@ -23,6 +23,7 @@ const encodeFrame = (frame: Frame): Buffer => {
   buf.writeInt32BE(Buffer.byteLength(data), 0);
   Buffer.from(data).copy(buf, LENGTH.LENGTH_FIELD);
 
+  console.log(`Encoded frame ${JSON.stringify(frame)} into buff ${buf.toString('hex')}`);
   return buf;
 };
 

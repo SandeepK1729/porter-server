@@ -48,6 +48,10 @@ const upgradeHandler = (req: http.IncomingMessage, socket: Socket) => {
     });
   });
 
+  socket.on("error", (err) => {
+    console.error("Socket error:", err);
+  });
+
   socket.on("close", () => {
     agentsMap.delete(tunnelId);
     console.log("🛑 Agent disconnected:", tunnelId);
