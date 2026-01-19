@@ -1,9 +1,9 @@
 import http from "node:http";
-import crypto from "node:crypto";
 import { Socket } from "node:net";
 
 import { agentsMap, pendingMap } from "@/server";
 import { decodeFrames, encodeFrame, FrameType } from "@/util/buffer";
+import { generateRandomId } from "@/util";
 
 const SOCKET_UPGRADE_RESPONSE = `
 HTTP/1.1 101 Switching Protocols\r
@@ -21,14 +21,17 @@ const upgradeHandler = (req: http.IncomingMessage, socket: Socket) => {
 
   console.log("🔼 Upgrade request received from agent", req.url);
 
-  const tunnelId = crypto.randomBytes(4).toString("hex");
+  const tunnelId = generateRandomId();
   socket.write(SOCKET_UPGRADE_RESPONSE);
 
   agentsMap.set(tunnelId, { socket });
   console.log("🚀 Agent connected:", tunnelId);
 
   // Send tunnel ID to agent
-  socket.write(encodeFrame({ type: FrameType.REGISTERED, tunnelId }));
+  socket.write(
+    encodeFrame({ type: FrameType.TUNNEL_INIT, requestId: "00000000", payload: { tunnelId } }
+    ));
+
 
   let buffer = Buffer.alloc(0);
 
@@ -37,25 +40,51 @@ const upgradeHandler = (req: http.IncomingMessage, socket: Socket) => {
     buffer = remaining;
 
     frames.forEach((frame) => {
-      if (frame.type === FrameType.RESPONSE) {
-        const pending = pendingMap.get(frame.requestId);
-        if (!pending) return;
+      if (frame.type < 4 || !frame.requestId || !pendingMap.has(frame.requestId)) return; // Ignore request frames
+      const { res } = pendingMap.get(frame.requestId) || {};
+      if (!res) return;
 
-        pending.res.writeHead(frame.payload.status, frame.payload.headers);
-        pending.res.end(frame.payload.body);
-        pendingMap.delete(frame.requestId);
+      switch (frame.type) {
+        case FrameType.RESPONSE_START: {
+          res.writeHead(frame.payload.status, frame.payload.headers);
+          break;
+        }
+        case FrameType.RESPONSE_DATA: {
+          res.write(frame.payload);
+          break;
+        }
+        case FrameType.RESPONSE_END: {
+          res.end();
+          pendingMap.delete(frame.requestId);
+          break;
+        }
       }
     });
   });
 
-  socket.on("error", (err) => {
-    console.error("Socket error:", err);
+  socket.on("end", () => {
+    console.log("🧹 Agent sent FIN:", tunnelId);
+    cleanupAgent(tunnelId);
   });
 
-  socket.on("close", () => {
-    agentsMap.delete(tunnelId);
-    console.log("🛑 Agent disconnected:", tunnelId);
+  socket.on("close", (hadError) => {
+    console.log("🛑 Socket closed:", tunnelId, "error?", hadError);
+    cleanupAgent(tunnelId);
   });
+
+  socket.on("error", (err) => {
+    console.log("⚠️ Socket error:", tunnelId, err.message);
+    cleanupAgent(tunnelId);
+  });
+
+  const cleanupAgent = (tunnelId: string) => {
+    const agent = agentsMap.get(tunnelId);
+    if (agent) {
+      agent.socket.destroy();
+      agentsMap.delete(tunnelId);
+      console.log("❌ Agent disconnected and cleaned up:", tunnelId);
+    }
+  };
 };
 
 export default upgradeHandler;

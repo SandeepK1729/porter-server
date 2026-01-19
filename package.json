@@ -21,7 +21,7 @@
   "type": "commonjs",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "tsx --inspect src/server.ts --watch",
+    "dev": "tsx watch src/server.ts",
     "test": "vitest",
     "build": "tsc && ncc build src/server.ts --out dist",
     "start": "node dist/index.js"
