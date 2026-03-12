@@ -1,9 +1,8 @@
-import crypto from "node:crypto";
 import { agentsMap, pendingMap } from "../server";
 import { encodeFrame, FrameType } from "../util/buffer";
 import http from "node:http";
 import healthCheck from "./healthRoute";
-import { generateRandomId } from "@/util";
+import { generateRandomId, sanitizeHeaders } from "@/util";
 
 const http1Handler = (req: http.IncomingMessage, res: http.ServerResponse) => {
   if (!req.url) {
@@ -42,7 +41,7 @@ const http1Handler = (req: http.IncomingMessage, res: http.ServerResponse) => {
         payload: {
           method: req.method,
           path: "/" + rest.join("/"),
-          headers: req.headers,
+          headers: sanitizeHeaders(req.headers),
         },
       }),
     );

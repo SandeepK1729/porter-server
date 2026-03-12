@@ -14,6 +14,12 @@ const HTTP2_SERVER_OPTIONS = {
   allowHTTP1: true,
 };
 
+const EXCLUDE_HEADER_MATCHERS = [
+  /^x-porter-/, // Internal headers used for communication between agent and server
+  /^x-forwarded-/, // Common proxy headers that can be noisy
+  /^fly-/, // proxy headers added by fly.io that can be noisy
+];
+
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 9000;
 
-export { HTTP2_SERVER_OPTIONS, PORT };
+export { HTTP2_SERVER_OPTIONS, PORT, EXCLUDE_HEADER_MATCHERS };
