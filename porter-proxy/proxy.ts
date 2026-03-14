@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 
 const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost:3000';
-const redirectDomain = process.env.NEXT_PUBLIC_REDIRECT_DOMAIN || 'example.com';
+const redirectDomain = process.env.NEXT_PUBLIC_REDIRECT_DOMAIN || 'localhost:3000';
 
 function extractSubdomain(request: NextRequest): string | null {
   const url = request.url;
@@ -42,7 +42,7 @@ function extractSubdomain(request: NextRequest): string | null {
   return isSubdomain ? hostname.replace(`.${rootDomainFormatted}`, '') : null;
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const subdomain = extractSubdomain(request);
 
@@ -57,7 +57,7 @@ export async function middleware(request: NextRequest) {
       // return NextResponse.rewrite(new URL(`/s/${subdomain}`, request.url));
       // redirect to external URL
     
-      console.log(`Redirecting to https://${subdomain}.${redirectDomain}`);
+      console.log(`Redirecting to https://${redirectDomain}/${subdomain}`);
       return NextResponse.redirect(new URL(`https://${redirectDomain}/${subdomain}`, request.url));
     }
   }
