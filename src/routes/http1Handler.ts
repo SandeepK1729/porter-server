@@ -10,14 +10,25 @@ const http1Handler = (req: http.IncomingMessage, res: http.ServerResponse) => {
     return res.end("Bad request");
   }
 
+  const parsedUrl = new URL(req.url, "http://localhost");
+
   // ---- Internal routes ----
   if (req.url === "/healthz") return healthCheck(req, res);
 
-  if (req.url === "/agent") return;
+  if (parsedUrl.pathname === "/agent") {
+    res.writeHead(426);
+    return res.end("Upgrade Required");
+  }
 
   // ---- Public traffic ----
-  const [, tunnelId, ...rest] = req.url.split("/");
-  const agent = agentsMap.get(tunnelId!);
+  const [tunnelId, ...rest] = parsedUrl.pathname.split("/").filter(Boolean);
+
+  if (!tunnelId) {
+    res.writeHead(404);
+    return res.end("Tunnel not found");
+  }
+
+  const agent = agentsMap.get(tunnelId);
 
   if (!agent) {
     res.writeHead(404);
@@ -25,8 +36,16 @@ const http1Handler = (req: http.IncomingMessage, res: http.ServerResponse) => {
   }
 
   const requestId = generateRandomId(8);
-  pendingMap.set(requestId, { req, res });
+  pendingMap.set(requestId, { req, res, tunnelId });
   const commonPayload = { requestId };
+
+  const cleanupPending = () => {
+    pendingMap.delete(requestId);
+  };
+
+  res.once("close", cleanupPending);
+  req.once("aborted", cleanupPending);
+  req.once("error", cleanupPending);
 
   console.log(
     `➡️  Incoming request - ${requestId} : ${req.method} ${req.url} `,
@@ -67,13 +86,11 @@ const http1Handler = (req: http.IncomingMessage, res: http.ServerResponse) => {
       );
     });
 
-    // TODO: In case of small request bodies, 'end' might fire before 'data'
-
   } catch (err) {
     console.log("⚠️ Error sending request to agent:", tunnelId, err);
     res.writeHead(502);
     res.end("Agent unavailable");
-    pendingMap.delete(requestId);
+    cleanupPending();
   }
 };
 

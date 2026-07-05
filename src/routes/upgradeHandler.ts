@@ -12,6 +12,25 @@ Upgrade: tunnel\r
 \r
 `;
 
+const cleanupAgent = (tunnelId: string) => {
+  const agent = agentsMap.get(tunnelId);
+  if (agent) {
+    agent.socket.destroy();
+    agentsMap.delete(tunnelId);
+    console.log("❌ Agent disconnected and cleaned up:", tunnelId);
+  }
+
+  for (const [requestId, pending] of pendingMap.entries()) {
+    if (pending.tunnelId !== tunnelId) continue;
+
+    if (!pending.res.writableEnded) {
+      pending.res.writeHead(502);
+      pending.res.end("Agent disconnected");
+    }
+    pendingMap.delete(requestId);
+  }
+};
+
 const upgradeHandler = (req: http.IncomingMessage, socket: Socket) => {
   // Only handle /agent upgrades
   if (req.url !== "/agent") {
@@ -32,7 +51,6 @@ const upgradeHandler = (req: http.IncomingMessage, socket: Socket) => {
     encodeFrame({ type: FrameType.TUNNEL_INIT, requestId: "00000000", payload: { tunnelId } }
     ));
 
-
   let buffer = Buffer.alloc(0);
 
   socket.on("data", (chunk) => {
@@ -40,13 +58,15 @@ const upgradeHandler = (req: http.IncomingMessage, socket: Socket) => {
     buffer = remaining;
 
     frames.forEach((frame) => {
-      if (frame.type < 4 || !frame.requestId || !pendingMap.has(frame.requestId)) return; // Ignore request frames
+      if (frame.type < FrameType.RESPONSE_START || frame.type > FrameType.RESPONSE_END) return;
+      if (!frame.requestId || !pendingMap.has(frame.requestId)) return;
+
       const { res } = pendingMap.get(frame.requestId) || {};
       if (!res) return;
 
       switch (frame.type) {
         case FrameType.RESPONSE_START: {
-          res.writeHead(frame.payload.status, frame.payload.headers);
+          res.writeHead(frame.payload?.status ?? 200, frame.payload?.headers);
           break;
         }
         case FrameType.RESPONSE_DATA: {
@@ -76,15 +96,6 @@ const upgradeHandler = (req: http.IncomingMessage, socket: Socket) => {
     console.log("⚠️ Socket error:", tunnelId, err.message);
     cleanupAgent(tunnelId);
   });
-
-  const cleanupAgent = (tunnelId: string) => {
-    const agent = agentsMap.get(tunnelId);
-    if (agent) {
-      agent.socket.destroy();
-      agentsMap.delete(tunnelId);
-      console.log("❌ Agent disconnected and cleaned up:", tunnelId);
-    }
-  };
 };
 
 export default upgradeHandler;

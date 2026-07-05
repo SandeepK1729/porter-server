@@ -7,7 +7,7 @@ const healthCheck = (req: http.IncomingMessage, res: http.ServerResponse) => {
     agents: agentsMap.size,
     pending_requests: pendingMap.size,
   };
-  res.writeHead(200);
+  res.writeHead(200, { "content-type": "application/json" });
   res.end(JSON.stringify(payload));
 };
 

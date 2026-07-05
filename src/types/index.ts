@@ -3,6 +3,7 @@ import http from "http";
 interface PendingRequest {
   req: http.IncomingMessage;
   res: http.ServerResponse;
+  tunnelId: string;
 }
 
 interface Agent {

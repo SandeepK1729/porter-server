@@ -63,7 +63,7 @@ const decodeFrames = (buffer: Buffer) => {
     const len = buffer.readUInt32BE(offset);
     if (buffer.length - offset < len + 4) break;
 
-    const type = buffer.readUInt8(offset + 4); // type
+    const type = buffer.readUInt8(offset + 4) as FrameType; // type
     const requestId = buffer
       .slice(offset + 5, offset + 13)
       .toString("hex"); // 
@@ -79,7 +79,7 @@ const decodeFrames = (buffer: Buffer) => {
       payload = JSON.parse(payloadBuf.toString());
     }
 
-    frames.push({ type, requestId, payload });
+    frames.push({ type, requestId, payload } as Frame);
     offset += len + 4;
   }
 
