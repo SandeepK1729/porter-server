@@ -5,6 +5,26 @@ on:
   workflow_dispatch:
 
 jobs:
+  go-migration-build:
+    name: Go Migration Build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Build Go migration server
+        run: |
+          cd go-server
+          go build ./...
+
   load-test:
     name: Load Test
     runs-on: ubuntu-latest
