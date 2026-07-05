@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  load-test:
+    name: Load Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Start server
+        run: |
+          npm run start > server.log 2>&1 &
+          echo $! > server.pid
+
+      - name: Wait for health endpoint
+        run: |
+          for i in {1..30}; do
+            if curl -sf "http://127.0.0.1:9000/healthz" > /dev/null; then
+              echo "Server is healthy"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Server failed health check"
+          cat server.log
+          exit 1
+
+      - name: Download previous load-test artifact
+        id: previous
+        continue-on-error: true
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: load-test.yml
+          workflow_conclusion: success
+          branch: ${{ github.ref_name }}
+          name: loadtest-result
+          path: artifacts/loadtest-previous
+          if_no_artifact_found: warn
+          check_artifacts: true
+
+      - name: Run load test
+        run: |
+          node scripts/loadtest/run-loadtest.js \
+            --out artifacts/loadtest/current.json \
+            --url http://127.0.0.1:9000/healthz \
+            --connections 50 \
+            --duration 20 \
+            --pipelining 1
+
+      - name: Compare with previous run
+        run: |
+          node scripts/loadtest/compare-loadtest.js \
+            --current artifacts/loadtest/current.json \
+            --previous artifacts/loadtest-previous \
+            --out artifacts/loadtest/comparison.md
+
+      - name: Publish comparison summary
+        if: always()
+        run: |
+          if [ -f artifacts/loadtest/comparison.md ]; then
+            cat artifacts/loadtest/comparison.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No comparison output generated." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload load-test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: loadtest-result
+          path: |
+            artifacts/loadtest/current.json
+            artifacts/loadtest/comparison.md
+            server.log
+          retention-days: 90
+
+      - name: Stop server
+        if: always()
+        run: |
+          if [ -f server.pid ]; then
+            kill "$(cat server.pid)" || true
+          fi
