@@ -19,12 +19,27 @@ const toFloat = (value, fallback) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const toBool = (value, fallback = false) => {
+  if (value === undefined || value === null) return fallback;
+  const normalized = String(value).trim().toLowerCase();
+  if (["1", "true", "yes", "y", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "n", "off"].includes(normalized)) return false;
+  return fallback;
+};
+
 const outputFile = getArg("out", "artifacts/loadtest/current.json");
 const url = getArg("url", process.env.LOADTEST_URL || "http://127.0.0.1:9000/healthz");
 const connections = toInt(getArg("connections", process.env.LOADTEST_CONNECTIONS || "50"), 50);
 const duration = toInt(getArg("duration", process.env.LOADTEST_DURATION || "20"), 20);
 const pipelining = toInt(getArg("pipelining", process.env.LOADTEST_PIPELINING || "1"), 1);
 const timeout = toFloat(getArg("timeout", process.env.LOADTEST_TIMEOUT || "30"), 30);
+const verbose =
+  process.argv.includes("--verbose") ||
+  toBool(process.env.LOADTEST_VERBOSE, false);
+
+const verboseLog = (...args) => {
+  if (verbose) console.log("[loadtest:verbose]", ...args);
+};
 
 const run = (opts) =>
   new Promise((resolve, reject) => {
@@ -50,7 +65,31 @@ const main = async () => {
     },
   };
 
+  verboseLog("Runner configuration", {
+    outputFile,
+    url,
+    connections,
+    duration,
+    pipelining,
+    timeout,
+    nodeVersion: process.version,
+    ci: Boolean(process.env.CI),
+    commitSha: process.env.GITHUB_SHA || null,
+    runId: process.env.GITHUB_RUN_ID || null,
+  });
+
   const result = await run(options);
+
+  verboseLog("Raw autocannon top-level counters", {
+    requestsTotal: result.requests.total,
+    requestsAverage: result.requests.average,
+    latencyAverage: result.latency.average,
+    throughputAverage: result.throughput.average,
+    errors: result.errors,
+    timeouts: result.timeouts,
+    non2xx: result.non2xx,
+    resets: result.resets,
+  });
 
   if (
     result.requests.total <= 0 ||
@@ -111,6 +150,7 @@ const main = async () => {
 
   fs.mkdirSync(path.dirname(outputFile), { recursive: true });
   fs.writeFileSync(outputFile, JSON.stringify(payload, null, 2));
+  verboseLog("Wrote benchmark JSON", outputFile);
 
   console.log("Load test complete");
   console.log(`- URL: ${url}`);
@@ -118,6 +158,7 @@ const main = async () => {
   console.log(`- Latency avg (ms): ${payload.metrics.latency.average}`);
   console.log(`- Throughput avg (bytes/sec): ${payload.metrics.throughput.average}`);
   console.log(`- Output: ${outputFile}`);
+  verboseLog("Persisted payload", payload);
 };
 
 main().catch((error) => {

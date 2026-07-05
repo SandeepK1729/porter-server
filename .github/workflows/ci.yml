@@ -52,7 +52,7 @@ jobs:
         continue-on-error: true
         uses: dawidd6/action-download-artifact@v6
         with:
-          workflow: load-test.yml
+          workflow: ci.yml
           workflow_conclusion: success
           branch: ${{ github.ref_name }}
           name: loadtest-result
@@ -60,21 +60,36 @@ jobs:
           if_no_artifact_found: warn
           check_artifacts: true
 
+      - name: Log previous artifact contents
+        run: |
+          echo "Downloaded previous artifact tree (if any):"
+          if [ -d artifacts/loadtest-previous ]; then
+            find artifacts/loadtest-previous -maxdepth 5 -print
+          else
+            echo "No previous artifact directory found."
+          fi
+
       - name: Run load test
+        env:
+          LOADTEST_VERBOSE: "true"
         run: |
           node scripts/loadtest/run-loadtest.js \
             --out artifacts/loadtest/current.json \
             --url http://127.0.0.1:9000/healthz \
             --connections 50 \
             --duration 20 \
-            --pipelining 1
+            --pipelining 1 \
+            --verbose
 
       - name: Compare with previous run
+        env:
+          LOADTEST_VERBOSE: "true"
         run: |
           node scripts/loadtest/compare-loadtest.js \
             --current artifacts/loadtest/current.json \
             --previous artifacts/loadtest-previous \
-            --out artifacts/loadtest/comparison.md
+            --out artifacts/loadtest/comparison.md \
+            --verbose
 
       - name: Publish comparison summary
         if: always()
