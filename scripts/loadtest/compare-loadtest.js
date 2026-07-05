@@ -13,6 +13,14 @@ const toFloat = (value, fallback) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const toBool = (value, fallback = false) => {
+  if (value === undefined || value === null) return fallback;
+  const normalized = String(value).trim().toLowerCase();
+  if (["1", "true", "yes", "y", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "n", "off"].includes(normalized)) return false;
+  return fallback;
+};
+
 const existsFile = (filePath) => {
   try {
     return fs.statSync(filePath).isFile();
@@ -54,6 +62,13 @@ const regressionThresholdPct = toFloat(
   getArg("regression-threshold", process.env.LOADTEST_REGRESSION_THRESHOLD || "10"),
   10,
 );
+const verbose =
+  process.argv.includes("--verbose") ||
+  toBool(process.env.LOADTEST_VERBOSE, false);
+
+const verboseLog = (...args) => {
+  if (verbose) console.log("[loadtest:compare:verbose]", ...args);
+};
 
 if (!existsFile(currentPath)) {
   console.error(`Current results file was not found: ${currentPath}`);
@@ -62,6 +77,14 @@ if (!existsFile(currentPath)) {
 
 const current = readJson(currentPath);
 const previousPath = findJsonFile(previousInput);
+
+verboseLog("Comparison inputs", {
+  currentPath,
+  previousInput,
+  previousPath,
+  outputPath,
+  regressionThresholdPct,
+});
 
 const getMetric = (obj, pathKey) =>
   pathKey.split(".").reduce((acc, key) => (acc ? acc[key] : undefined), obj);
@@ -125,6 +148,16 @@ if (!previousPath) {
       }
     }
 
+    verboseLog("Metric evaluation", {
+      metric: metric.label,
+      direction: metric.direction,
+      currentValue,
+      previousValue,
+      delta,
+      threshold: regressionThresholdPct,
+      status,
+    });
+
     lines.push(
       `| ${metric.label} | ${formatNumber(currentValue)} | ${formatNumber(previousValue)} | ${formatDelta(delta)} | ${status} |`,
     );
@@ -134,11 +167,20 @@ if (!previousPath) {
 lines.push("");
 lines.push(`Regression threshold: ${regressionThresholdPct}%`);
 lines.push(`Fail on regression: ${process.env.FAIL_ON_LOADTEST_REGRESSION === "true" ? "true" : "false"}`);
+lines.push("");
+lines.push("Threshold semantics:");
+lines.push(`- For higher-is-better metrics, a drop larger than ${regressionThresholdPct}% is marked as regression.`);
+lines.push(`- For lower-is-better metrics, an increase larger than ${regressionThresholdPct}% is marked as regression.`);
+lines.push("- Example: previous Requests/sec = 1000, current = 890 => -11.00% => regression when threshold is 10%.");
 
 fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 fs.writeFileSync(outputPath, `${lines.join("\n")}\n`);
 
 console.log(lines.join("\n"));
+verboseLog("Regression decision", {
+  hasRegression,
+  failOnRegression: process.env.FAIL_ON_LOADTEST_REGRESSION === "true",
+});
 
 if (hasRegression && process.env.FAIL_ON_LOADTEST_REGRESSION === "true") {
   process.exit(1);
