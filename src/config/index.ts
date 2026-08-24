@@ -39,4 +39,6 @@ const parsePort = (value: string | undefined, fallback = 9000): number => {
 
 const PORT = parsePort(process.env.PORT);
 
-export { HTTP2_SERVER_OPTIONS, PORT, EXCLUDE_HEADER_MATCHERS };
+const SUBDOMAIN = process.env.SUBDOMAIN || ".porter.thesandeep.in";
+
+export { HTTP2_SERVER_OPTIONS, PORT, EXCLUDE_HEADER_MATCHERS, SUBDOMAIN };
