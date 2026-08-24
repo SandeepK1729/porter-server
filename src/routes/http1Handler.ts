@@ -3,6 +3,17 @@ import { encodeFrame, FrameType } from "../util/buffer";
 import http from "node:http";
 import healthCheck from "./healthRoute";
 import { generateRandomId, sanitizeHeaders } from "@/util";
+import { SUBDOMAIN } from "@/config";
+
+const getTunnelIdFromHost = (req: http.IncomingMessage) => {
+  const host = req.headers.host;
+  if (!host) return undefined;
+
+  const hostname = (host.split(":")[0] as string).toLowerCase();
+
+  if (!hostname.endsWith(SUBDOMAIN)) return undefined;
+  return hostname.split(SUBDOMAIN)[0];
+};
 
 const http1Handler = (req: http.IncomingMessage, res: http.ServerResponse) => {
   if (!req.url) {
@@ -21,7 +32,17 @@ const http1Handler = (req: http.IncomingMessage, res: http.ServerResponse) => {
   }
 
   // ---- Public traffic ----
-  const [tunnelId, ...rest] = parsedUrl.pathname.split("/").filter(Boolean);
+  const subdomainTunnelId = getTunnelIdFromHost(req);
+  let tunnelId, restPath;
+
+  if (subdomainTunnelId) {
+    tunnelId = subdomainTunnelId;
+    restPath = parsedUrl.pathname;
+  } else {
+    const [pathTunnelId, ...rest] = parsedUrl.pathname.split("/").filter(Boolean);
+    tunnelId = pathTunnelId;
+    restPath = "/" + rest.join("/");
+  }
 
   if (!tunnelId) {
     res.writeHead(404);
@@ -48,7 +69,7 @@ const http1Handler = (req: http.IncomingMessage, res: http.ServerResponse) => {
   req.once("error", cleanupPending);
 
   console.log(
-    `➡️  Incoming request - ${requestId} : ${req.method} ${req.url} `,
+    `➡️ Tunnel: ${tunnelId} Incoming request - ${requestId} : ${req.method} ${req.url} `,
   );
 
   try {
@@ -59,7 +80,7 @@ const http1Handler = (req: http.IncomingMessage, res: http.ServerResponse) => {
         type: FrameType.REQUEST_START,
         payload: {
           method: req.method,
-          path: "/" + rest.join("/"),
+          path: restPath,
           headers: sanitizeHeaders(req.headers),
         },
       }),
